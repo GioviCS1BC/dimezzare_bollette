@@ -211,27 +211,31 @@ if st.button("🚀 Avvia Simulazione di Rete (Anno 2023)", type="primary", use_c
                     m3.metric("Energia Eolica Prodotta", f"{energia_eolica_gwh:.0f} GWh")
                     m4.metric("Overgeneration (Sprecata)", f"{energia_tagliata_gwh:.0f} GWh")
                     
-                    # Grafico: Load Duration Curve (Curva di durata del carico)
-                    st.markdown("#### Curva di Durata del Carico (Load Duration Curve)")
-                    st.caption("Ordina tutte le 8760 ore dell'anno dal carico più alto al più basso. L'area blu mostra il lavoro risparmiato alle centrali termiche.")
+                    # Grafico: Andamento Cronologico (8760 ore)
+                    st.markdown("#### Andamento del Carico (8760 ore)")
+                    st.caption("Visualizzazione cronologica dell'intero anno. 🖱️ Usa la rotellina del mouse per fare zoom sui singoli mesi o giorni.")
                     
-                    carico_ordinato = np.sort(carico_zona)[::-1]
-                    residuo_ordinato = np.sort(carico_residuo)[::-1]
+                    df_chrono = pd.DataFrame({
+                        'Data': df_carico['Data_Ora'],
+                        'Carico Iniziale (MW)': carico_zona,
+                        'Carico Residuo (MW)': carico_residuo
+                    }).melt('Data', var_name='Tipo', value_name='MW')
                     
-                    df_ldc = pd.DataFrame({
-                        'Ore (da 1 a 8760)': np.arange(1, 8761),
-                        'Carico Iniziale (MW)': carico_ordinato,
-                        'Carico Residuo (MW)': residuo_ordinato
-                    }).melt('Ore (da 1 a 8760)', var_name='Tipo', value_name='MW')
+                    chart_chrono = alt.Chart(df_chrono).mark_line(opacity=0.8, strokeWidth=1).encode(
+                        x=alt.X('Data:T', title='Mese del 2023'),
+                        y=alt.Y('MW:Q', title='Potenza (MW)'),
+                        color=alt.Color(
+                            'Tipo:N', 
+                            scale=alt.Scale(domain=['Carico Iniziale (MW)', 'Carico Residuo (MW)'], range=['#CCCCCC', '#FF3333']),
+                            legend=alt.Legend(title="Legenda")
+                        ),
+                        # Aggiungiamo un tooltip per leggere i valori esatti passando col mouse
+                        tooltip=[alt.Tooltip('Data:T', format='%d %b %H:00'), 'Tipo:N', alt.Tooltip('MW:Q', format='.0f')]
+                    ).properties(
+                        height=400
+                    ).interactive(bind_y=False) # bind_y=False blocca l'asse Y e permette lo zoom solo nel tempo (orizzontale)
                     
-                    chart_ldc = alt.Chart(df_ldc).mark_line().encode(
-                        x='Ore (da 1 a 8760)',
-                        y='MW:Q',
-                        color=alt.Color('Tipo:N', scale=alt.Scale(domain=['Carico Iniziale (MW)', 'Carico Residuo (MW)'], range=['#CCCCCC', '#FF3333']))
-                    ).properties(height=350).interactive()
-                    
-                    st.altair_chart(chart_ldc, use_container_width=True)
-
+                    st.altair_chart(chart_chrono, use_container_width=True)
             # --- RIEPILOGO NAZIONALE ---
             with tabs[-1]:
                 st.subheader("Impatto Aggregato di Sistema")
