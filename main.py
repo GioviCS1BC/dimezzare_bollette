@@ -97,7 +97,12 @@ with col_mappa:
     st.subheader("1. Posiziona Parchi Eolici")
     st.caption("Clicca sulla mappa per ottenere le coordinate del nuovo parco.")
     
-    m = folium.Map(location=st.session_state.map_center, zoom_start=5)
+    # Creiamo la mappa usando OpenTopoMap per visualizzare chiaramente i rilievi
+    m = folium.Map(
+         location=st.session_state.map_center, 
+         zoom_start=6, # Ho aumentato un po' lo zoom per vedere meglio l'Italia
+         tiles="OpenTopoMap"
+    )
     
     # Disegna i parchi esistenti
     for i, parco in enumerate(st.session_state.flotta):
