@@ -199,8 +199,15 @@ if st.button("🚀 Avvia Simulazione di Rete (Anno 2019)", type="primary", use_c
     elif TOKEN_NINJA == "INSERISCI_QUI_IL_TUO_TOKEN":
         st.error("⚠️ Devi inserire il tuo Token API nel codice (riga 146) prima di avviare la simulazione.")
     else:
-        with st.spinner("Connessione a Renewables.ninja in corso..."):
-            df_carico = carica_fabbisogno_reale('20190101_20191231_MGP_Fabbisogno.xlsx')
+        with st.spinner("Caricamento dati e connessione a Renewables.ninja in corso..."):
+            df_carico = carica_fabbisogno_reale('Fabbisogno.xlsx')
+            
+            # --- PROTEZIONE CRASH ---
+            if df_carico is None:
+                st.error("❌ Errore: File Excel del fabbisogno non trovato o illeggibile. Assicurati di averlo caricato su GitHub e di aver inserito 'openpyxl' in requirements.txt.")
+                st.stop() # Ferma l'esecuzione qui senza far crashare l'app
+            # ------------------------
+            
             df_prod_zone = pd.DataFrame({'Data_Ora': df_carico['Data_Ora']})
             for zona in ["NORD", "CNOR", "CSUD", "SUD", "SICI", "SARD"]:
                 df_prod_zone[zona] = 0.0
