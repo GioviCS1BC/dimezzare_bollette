@@ -10,20 +10,21 @@ import altair as alt
 # FUNZIONI DI CALCOLO E DATI
 # ==========================================
 
-def scarica_produzione_ninja(lat, lon, token_api, mw_installati, turbina_scelta, anno=2023):
+def scarica_produzione_ninja(lat, lon, token_api, mw_installati, turbina_scelta, anno=2019):
     """
-    Interroga l'API di Renewables.ninja per ottenere la produzione oraria diretta (in MW).
+    Interroga l'API di Renewables.ninja chiedendo il Capacity Factor e convertendolo in MW.
     """
     url = 'https://www.renewables.ninja/api/data/wind'
     headers = {'Authorization': f'Token {token_api}'}
+    
     params = {
         'lat': lat,
         'lon': lon,
         'date_from': f'{anno}-01-01',
         'date_to': f'{anno}-12-31',
-        'capacity': mw_installati * 1000,
         'height': 100,                     
-        'turbine': turbina_scelta,     
+        'turbine': turbina_scelta,
+        'dataset': 'merra2',           
         'format': 'json'
     }
     
@@ -34,9 +35,9 @@ def scarica_produzione_ninja(lat, lon, token_api, mw_installati, turbina_scelta,
         return None
         
     dati = r.json()
-    df = pd.DataFrame(list(dati['data'].items()), columns=['Data_Ora', 'Produzione_MW'])
+    df = pd.DataFrame(list(dati['data'].items()), columns=['Data_Ora', 'Capacity_Factor'])
     
-    # Fix overflow data
+    # Risolve il problema del formato Unix Timestamp
     primo_valore = str(df['Data_Ora'].iloc[0])
     if primo_valore.isdigit():
         df['Data_Ora'] = pd.to_datetime(df['Data_Ora'].astype(float), unit='ms', utc=True)
@@ -45,13 +46,14 @@ def scarica_produzione_ninja(lat, lon, token_api, mw_installati, turbina_scelta,
         
     df['Data_Ora'] = df['Data_Ora'].dt.tz_localize(None)
     
-    # FIX TYPEERROR: Convertiamo esplicitamente in numeri
-    df['Produzione_MW'] = pd.to_numeric(df['Produzione_MW'], errors='coerce') / 1000.0  
+    # Converte da stringa a numero e calcola la produzione reale in MW
+    df['Capacity_Factor'] = pd.to_numeric(df['Capacity_Factor'], errors='coerce')
+    df['Produzione_MW'] = df['Capacity_Factor'] * mw_installati
     
     return df
 
 @st.cache_data(show_spinner=False)
-def genera_carico_sintetico(anno=2023):
+def genera_carico_sintetico(anno=2019):
     """Genera un carico termico residuo fittizio (in MW) per le 6 zone italiane."""
     date_rng = pd.date_range(start=f'{anno}-01-01', end=f'{anno}-12-31 23:00:00', freq='h')
     ore = len(date_rng)
@@ -97,7 +99,7 @@ with col_mappa:
     
     m = folium.Map(location=st.session_state.map_center, zoom_start=6)
     
-    # Livelli mappa
+    # Livelli mappa (Topografica e Stradale)
     folium.TileLayer(tiles='OpenTopoMap', name='Mappa Topografica (Rilievi)').add_to(m)
     folium.TileLayer(tiles='OpenStreetMap', name='Mappa Stradale').add_to(m)
     folium.LayerControl().add_to(m)
@@ -114,7 +116,7 @@ with col_mappa:
 with col_flotta:
     st.subheader("2. Aggiungi al Portafoglio")
     
-    # Recupero coordinate con controlli di sicurezza
+    # Recupero coordinate sicuro
     if mappa is not None and "last_clicked" in mappa and mappa["last_clicked"] is not None:
         lat_click = mappa["last_clicked"]["lat"]
         lon_click = mappa["last_clicked"]["lng"]
@@ -131,12 +133,21 @@ with col_flotta:
         zona_in = c3.selectbox("Zona di Mercato", ["NORD", "CNOR", "CSUD", "SUD", "SICI", "SARD"])
         mw_in = c4.number_input("Capacità Installata (MW)", min_value=1.0, value=50.0, step=10.0)
         
+        modelli_turbine = {
+            "Onshore Standard (Vestas V112 - 3.3 MW)": "Vestas V112 3300",
+            "Onshore Grande (Vestas V150 - 4.2 MW)": "Vestas V150 4200",
+            "Offshore Gigante (Vestas V164 - 9.5 MW)": "Vestas V164 9500"
+        }
+        scelta_turbina = st.selectbox("Modello Turbina", list(modelli_turbine.keys()))
+        
         submit_parco = st.form_submit_button("➕ Aggiungi Parco alla Flotta")
         if submit_parco:
             st.session_state.flotta.append({
                 "id": len(st.session_state.flotta) + 1,
                 "lat": lat_in, "lon": lon_in, 
-                "zona": zona_in, "mw": mw_in
+                "zona": zona_in, "mw": mw_in,
+                "turbina_id": modelli_turbine[scelta_turbina],
+                "turbina_nome": scelta_turbina
             })
             st.rerun()
 
@@ -156,37 +167,32 @@ st.subheader("3. Avvia Simulazione")
 # INSERISCI QUI IL TUO TOKEN API DI RENEWABLES.NINJA
 TOKEN_NINJA = "c6039a7ae92563c77ebbb7586ba45a1c7cf42dc8"
 
-if st.button("🚀 Avvia Simulazione di Rete (Anno 2023)", type="primary", use_container_width=True):
+if st.button("🚀 Avvia Simulazione di Rete (Anno 2019)", type="primary", use_container_width=True):
     if len(st.session_state.flotta) == 0:
         st.warning("Aggiungi almeno un parco eolico alla flotta prima di simulare.")
     elif TOKEN_NINJA == "INSERISCI_QUI_IL_TUO_TOKEN":
-        st.error("⚠️ Devi inserire il tuo Token API nel codice (riga 126) prima di avviare la simulazione.")
+        st.error("⚠️ Devi inserire il tuo Token API nel codice (riga 135) prima di avviare la simulazione.")
     else:
         with st.spinner("Connessione a Renewables.ninja in corso..."):
-            df_carico = genera_carico_sintetico(2023)
+            df_carico = genera_carico_sintetico(2019)
             df_prod_zone = pd.DataFrame({'Data_Ora': df_carico['Data_Ora']})
             for zona in ["NORD", "CNOR", "CSUD", "SUD", "SICI", "SARD"]:
                 df_prod_zone[zona] = 0.0
             
             errori = False
             for parco in st.session_state.flotta:
-                # 1. Recuperiamo il modello di turbina salvato per questo parco
-                # (Se per qualche motivo è un parco vecchio senza turbina, usa la Vestas standard)
                 turbina_corrente = parco.get('turbina_id', 'Vestas V112 3300')
                 
-                # 2. Chiamata corretta con TUTTI E 6 i parametri nell'ordine giusto
                 df_produzione = scarica_produzione_ninja(
                     parco['lat'], 
                     parco['lon'], 
                     TOKEN_NINJA, 
                     parco['mw'], 
-                    turbina_corrente,  # <-- Il modello di turbina (5° parametro)
-                    2023               # <-- L'anno (6° parametro)
+                    turbina_corrente,
+                    2019
                 )
                 
-                
                 if df_produzione is not None:
-                    # L'API restituisce già i MW reali
                     df_prod_zone[parco['zona']] += df_produzione['Produzione_MW'].values
                 else:
                     errori = True
@@ -209,52 +215,4 @@ if st.button("🚀 Avvia Simulazione di Rete (Anno 2023)", type="primary", use_c
                     energia_eolica_gwh = eolico_zona.sum() / 1000
                     energia_termica_residua_gwh = carico_residuo.sum() / 1000
                     energia_tagliata_gwh = curtailment.sum() / 1000
-                    copertura_pct = ((energia_richiesta_gwh - energia_termica_residua_gwh) / energia_richiesta_gwh) * 100
-                    
-                    df_nazionale_carico += carico_zona
-                    df_nazionale_residuo += carico_residuo
-                    
-                    with tabs[idx]:
-                        st.subheader(f"Zona {zona} - Risultati 2023")
-                        m1, m2, m3, m4 = st.columns(4)
-                        m1.metric("Capacità Eolica (MW)", df_flotta[df_flotta['zona']==zona]['mw'].sum())
-                        m2.metric("Copertura del Carico", f"{copertura_pct:.1f} %")
-                        m3.metric("Energia Eolica Prodotta", f"{energia_eolica_gwh:.0f} GWh")
-                        m4.metric("Overgeneration (Sprecata)", f"{energia_tagliata_gwh:.0f} GWh")
-                        
-                        st.markdown("#### Andamento del Carico (8760 ore)")
-                        st.caption("🖱️ Usa la rotellina del mouse per fare zoom sui singoli mesi o giorni.")
-                        
-                        df_chrono = pd.DataFrame({
-                            'Data': df_carico['Data_Ora'],
-                            'Carico Iniziale (MW)': carico_zona,
-                            'Carico Residuo (MW)': carico_residuo
-                        }).melt('Data', var_name='Tipo', value_name='MW')
-                        
-                        chart_chrono = alt.Chart(df_chrono).mark_line(opacity=0.8, strokeWidth=1).encode(
-                            x=alt.X('Data:T', title='Mese del 2023'),
-                            y=alt.Y('MW:Q', title='Potenza (MW)'),
-                            color=alt.Color(
-                                'Tipo:N', 
-                                scale=alt.Scale(domain=['Carico Iniziale (MW)', 'Carico Residuo (MW)'], range=['#CCCCCC', '#FF3333']),
-                                legend=alt.Legend(title="Legenda")
-                            ),
-                            tooltip=[alt.Tooltip('Data:T', format='%d %b %H:00'), 'Tipo:N', alt.Tooltip('MW:Q', format='.0f')]
-                        ).properties(
-                            height=400
-                        ).interactive(bind_y=False) 
-                        
-                        st.altair_chart(chart_chrono, use_container_width=True)
-    
-                with tabs[-1]:
-                    st.subheader("Impatto Aggregato di Sistema")
-                    st.info("Ipotesi 'Zero Trasmissione': i numeri sono la somma aritmetica delle singole zone.")
-                    
-                    carico_tot = df_nazionale_carico.sum() / 1000
-                    residuo_tot = df_nazionale_residuo.sum() / 1000
-                    risparmio_gas = (carico_tot - residuo_tot) * 0.20 
-                    
-                    c1, c2, c3 = st.columns(3)
-                    c1.metric("Totale Carico Ridotto (GWh)", f"{(carico_tot - residuo_tot):.0f}")
-                    c2.metric("Risparmio stimato Gas (Mln Smc)", f"{risparmio_gas/1000:.0f}")
-                    c3.metric("Capacità Totale Flotta (MW)", df_flotta['mw'].sum())
+                    copertura_pct = ((energia_richiesta_gwh - energia_termica_residua_gwh) / energia_rich
