@@ -12,8 +12,7 @@ import altair as alt
 
 def scarica_produzione_ninja(lat, lon, token_api, mw_installati, turbina_scelta, anno=2019):
     """
-    Interroga l'API di Renewables.ninja chiedendo la produzione per 1 kW (Capacity Factor)
-    e convertendolo poi nei MW reali del nostro parco.
+    Interroga l'API di Renewables.ninja in kW reali e protegge i dati dai valori nulli (buchi meteo).
     """
     url = 'https://www.renewables.ninja/api/data/wind'
     headers = {'Authorization': f'Token {token_api}'}
@@ -23,7 +22,7 @@ def scarica_produzione_ninja(lat, lon, token_api, mw_installati, turbina_scelta,
         'lon': lon,
         'date_from': f'{anno}-01-01',
         'date_to': f'{anno}-12-31',
-        'capacity': 1.0,               # <--- IL FIX È QUI: Parametro obbligatorio per l'API (impostato a 1 kW)
+        'capacity': mw_installati * 1000,  # <-- Invia i veri kW (es. 50 MW = 50.000 kW)
         'height': 100,                     
         'turbine': turbina_scelta,
         'dataset': 'merra2',           
@@ -37,7 +36,12 @@ def scarica_produzione_ninja(lat, lon, token_api, mw_installati, turbina_scelta,
         return None
         
     dati = r.json()
-    df = pd.DataFrame(list(dati['data'].items()), columns=['Data_Ora', 'Capacity_Factor'])
+    
+    if 'data' not in dati or len(dati['data']) == 0:
+        st.error("L'API non ha restituito dati per queste coordinate. Prova a spostare il parco.")
+        return None
+        
+    df = pd.DataFrame(list(dati['data'].items()), columns=['Data_Ora', 'Produzione_kW'])
     
     # Risolve il problema del formato Unix Timestamp
     primo_valore = str(df['Data_Ora'].iloc[0])
@@ -48,9 +52,9 @@ def scarica_produzione_ninja(lat, lon, token_api, mw_installati, turbina_scelta,
         
     df['Data_Ora'] = df['Data_Ora'].dt.tz_localize(None)
     
-    # Converte da stringa a numero e calcola la produzione reale in MW
-    df['Capacity_Factor'] = pd.to_numeric(df['Capacity_Factor'], errors='coerce')
-    df['Produzione_MW'] = df['Capacity_Factor'] * mw_installati
+    # FIX DEFINITIVO: Converte in numero, sostituisce i buchi (NaN) con 0, e divide per avere i MW
+    df['Produzione_kW'] = pd.to_numeric(df['Produzione_kW'], errors='coerce').fillna(0)
+    df['Produzione_MW'] = df['Produzione_kW'] / 1000.0
     
     return df
 
