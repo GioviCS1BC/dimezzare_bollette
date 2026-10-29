@@ -12,7 +12,7 @@ import altair as alt
 
 def scarica_produzione_ninja(lat, lon, token_api, mw_installati, turbina_scelta, anno=2019):
     """
-    Interroga l'API di Renewables.ninja in kW reali e protegge i dati dai valori nulli (buchi meteo).
+    Interroga l'API di Renewables.ninja estraendo i dati in modo blindato contro i cambi di formato.
     """
     url = 'https://www.renewables.ninja/api/data/wind'
     headers = {'Authorization': f'Token {token_api}'}
@@ -22,7 +22,7 @@ def scarica_produzione_ninja(lat, lon, token_api, mw_installati, turbina_scelta,
         'lon': lon,
         'date_from': f'{anno}-01-01',
         'date_to': f'{anno}-12-31',
-        'capacity': mw_installati * 1000,  # <-- Invia i veri kW (es. 50 MW = 50.000 kW)
+        'capacity': mw_installati * 1000,  # Ninja richiede i kW
         'height': 100,                     
         'turbine': turbina_scelta,
         'dataset': 'merra2',           
@@ -38,12 +38,24 @@ def scarica_produzione_ninja(lat, lon, token_api, mw_installati, turbina_scelta,
     dati = r.json()
     
     if 'data' not in dati or len(dati['data']) == 0:
-        st.error("L'API non ha restituito dati per queste coordinate. Prova a spostare il parco.")
+        st.error("L'API non ha restituito dati per queste coordinate. Il punto potrebbe essere troppo al largo.")
         return None
         
-    df = pd.DataFrame(list(dati['data'].items()), columns=['Data_Ora', 'Produzione_kW'])
+    # === FIX DEFINITIVO: ESTRAZIONE DATI A PROVA DI BOMBA ===
+    records = []
+    for time_key, value in dati['data'].items():
+        if isinstance(value, dict):
+            # Se Ninja nasconde il dato in un dizionario, lo tiriamo fuori
+            energia = value.get('electricity', list(value.values())[0] if value else 0.0)
+        else:
+            # Se è già un numero pulito
+            energia = value
+            
+        records.append({'Data_Ora': time_key, 'Produzione_kW': energia})
+        
+    df = pd.DataFrame(records)
     
-    # Risolve il problema del formato Unix Timestamp
+    # Risolve il problema del formato Unix Timestamp sulle date
     primo_valore = str(df['Data_Ora'].iloc[0])
     if primo_valore.isdigit():
         df['Data_Ora'] = pd.to_datetime(df['Data_Ora'].astype(float), unit='ms', utc=True)
@@ -52,7 +64,7 @@ def scarica_produzione_ninja(lat, lon, token_api, mw_installati, turbina_scelta,
         
     df['Data_Ora'] = df['Data_Ora'].dt.tz_localize(None)
     
-    # FIX DEFINITIVO: Converte in numero, sostituisce i buchi (NaN) con 0, e divide per avere i MW
+    # Conversione sicura in numero e poi in Megawatt
     df['Produzione_kW'] = pd.to_numeric(df['Produzione_kW'], errors='coerce').fillna(0)
     df['Produzione_MW'] = df['Produzione_kW'] / 1000.0
     
@@ -105,7 +117,6 @@ with col_mappa:
     
     m = folium.Map(location=st.session_state.map_center, zoom_start=6)
     
-    # Livelli mappa (Topografica e Stradale)
     folium.TileLayer(tiles='OpenTopoMap', name='Mappa Topografica (Rilievi)').add_to(m)
     folium.TileLayer(tiles='OpenStreetMap', name='Mappa Stradale').add_to(m)
     folium.LayerControl().add_to(m)
@@ -122,7 +133,6 @@ with col_mappa:
 with col_flotta:
     st.subheader("2. Aggiungi al Portafoglio")
     
-    # Recupero coordinate sicuro
     if mappa is not None and "last_clicked" in mappa and mappa["last_clicked"] is not None:
         lat_click = mappa["last_clicked"]["lat"]
         lon_click = mappa["last_clicked"]["lng"]
@@ -177,7 +187,7 @@ if st.button("🚀 Avvia Simulazione di Rete (Anno 2019)", type="primary", use_c
     if len(st.session_state.flotta) == 0:
         st.warning("Aggiungi almeno un parco eolico alla flotta prima di simulare.")
     elif TOKEN_NINJA == "INSERISCI_QUI_IL_TUO_TOKEN":
-        st.error("⚠️ Devi inserire il tuo Token API nel codice (riga 135) prima di avviare la simulazione.")
+        st.error("⚠️ Devi inserire il tuo Token API nel codice (riga 146) prima di avviare la simulazione.")
     else:
         with st.spinner("Connessione a Renewables.ninja in corso..."):
             df_carico = genera_carico_sintetico(2019)
@@ -199,7 +209,10 @@ if st.button("🚀 Avvia Simulazione di Rete (Anno 2019)", type="primary", use_c
                 )
                 
                 if df_produzione is not None:
+                    # Somma la produzione alla zona
                     df_prod_zone[parco['zona']] += df_produzione['Produzione_MW'].values
+                    # Messaggio di debug per confermare che i dati arrivano!
+                    st.toast(f"✅ Parco Zona {parco['zona']} caricato: {df_produzione['Produzione_MW'].sum()/1000:.1f} GWh prodotti")
                 else:
                     errori = True
                     
