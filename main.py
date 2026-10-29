@@ -12,7 +12,8 @@ import altair as alt
 
 def scarica_produzione_ninja(lat, lon, token_api, mw_installati, turbina_scelta, anno=2019):
     """
-    Interroga l'API di Renewables.ninja chiedendo il Capacity Factor e convertendolo in MW.
+    Interroga l'API di Renewables.ninja chiedendo la produzione per 1 kW (Capacity Factor)
+    e convertendolo poi nei MW reali del nostro parco.
     """
     url = 'https://www.renewables.ninja/api/data/wind'
     headers = {'Authorization': f'Token {token_api}'}
@@ -22,6 +23,7 @@ def scarica_produzione_ninja(lat, lon, token_api, mw_installati, turbina_scelta,
         'lon': lon,
         'date_from': f'{anno}-01-01',
         'date_to': f'{anno}-12-31',
+        'capacity': 1.0,               # <--- IL FIX È QUI: Parametro obbligatorio per l'API (impostato a 1 kW)
         'height': 100,                     
         'turbine': turbina_scelta,
         'dataset': 'merra2',           
