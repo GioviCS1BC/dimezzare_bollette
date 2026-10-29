@@ -115,9 +115,9 @@ with col_mappa:
     
     # Disegna i parchi esistenti
     # Inserisci qui il tuo token segreto di Renewables.ninja
-            TOKEN_NINJA = "c6039a7ae92563c77ebbb7586ba45a1c7cf42dc8"
+TOKEN_NINJA = "c6039a7ae92563c77ebbb7586ba45a1c7cf42dc8"
             
-            for parco in st.session_state.flotta:
+for parco in st.session_state.flotta:
                 # Richiama la NUOVA funzione invece di scarica_vento_openmeteo
                 df_produzione = scarica_produzione_ninja(
                     parco['lat'], 
