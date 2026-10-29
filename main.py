@@ -215,4 +215,52 @@ if st.button("🚀 Avvia Simulazione di Rete (Anno 2019)", type="primary", use_c
                     energia_eolica_gwh = eolico_zona.sum() / 1000
                     energia_termica_residua_gwh = carico_residuo.sum() / 1000
                     energia_tagliata_gwh = curtailment.sum() / 1000
-                    copertura_pct = ((energia_richiesta_gwh - energia_termica_residua_gwh) / energia_rich
+                    copertura_pct = ((energia_richiesta_gwh - energia_termica_residua_gwh) / energia_richiesta_gwh) * 100
+                    
+                    df_nazionale_carico += carico_zona
+                    df_nazionale_residuo += carico_residuo
+                    
+                    with tabs[idx]:
+                        st.subheader(f"Zona {zona} - Risultati 2019")
+                        m1, m2, m3, m4 = st.columns(4)
+                        m1.metric("Capacità Eolica (MW)", df_flotta[df_flotta['zona']==zona]['mw'].sum())
+                        m2.metric("Copertura del Carico", f"{copertura_pct:.1f} %")
+                        m3.metric("Energia Eolica Prodotta", f"{energia_eolica_gwh:.0f} GWh")
+                        m4.metric("Overgeneration (Sprecata)", f"{energia_tagliata_gwh:.0f} GWh")
+                        
+                        st.markdown("#### Andamento del Carico (8760 ore)")
+                        st.caption("🖱️ Usa la rotellina del mouse per fare zoom sui singoli mesi o giorni.")
+                        
+                        df_chrono = pd.DataFrame({
+                            'Data': df_carico['Data_Ora'],
+                            'Carico Iniziale (MW)': carico_zona,
+                            'Carico Residuo (MW)': carico_residuo
+                        }).melt('Data', var_name='Tipo', value_name='MW')
+                        
+                        chart_chrono = alt.Chart(df_chrono).mark_line(opacity=0.8, strokeWidth=1).encode(
+                            x=alt.X('Data:T', title='Mese del 2019'),
+                            y=alt.Y('MW:Q', title='Potenza (MW)'),
+                            color=alt.Color(
+                                'Tipo:N', 
+                                scale=alt.Scale(domain=['Carico Iniziale (MW)', 'Carico Residuo (MW)'], range=['#CCCCCC', '#FF3333']),
+                                legend=alt.Legend(title="Legenda")
+                            ),
+                            tooltip=[alt.Tooltip('Data:T', format='%d %b %H:00'), 'Tipo:N', alt.Tooltip('MW:Q', format='.0f')]
+                        ).properties(
+                            height=400
+                        ).interactive(bind_y=False) 
+                        
+                        st.altair_chart(chart_chrono, use_container_width=True)
+    
+                with tabs[-1]:
+                    st.subheader("Impatto Aggregato di Sistema")
+                    st.info("Ipotesi 'Zero Trasmissione': i numeri sono la somma aritmetica delle singole zone.")
+                    
+                    carico_tot = df_nazionale_carico.sum() / 1000
+                    residuo_tot = df_nazionale_residuo.sum() / 1000
+                    risparmio_gas = (carico_tot - residuo_tot) * 0.20 
+                    
+                    c1, c2, c3 = st.columns(3)
+                    c1.metric("Totale Carico Ridotto (GWh)", f"{(carico_tot - residuo_tot):.0f}")
+                    c2.metric("Risparmio stimato Gas (Mln Smc)", f"{risparmio_gas/1000:.0f}")
+                    c3.metric("Capacità Totale Flotta (MW)", df_flotta['mw'].sum())
