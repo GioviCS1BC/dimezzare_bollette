@@ -41,10 +41,10 @@ def scarica_produzione_fv_ninja(lat, lon, token_api, mw_installati, tipo_impiant
         'lat': lat, 'lon': lon,
         'date_from': f'{anno}-01-01', 'date_to': f'{anno}-12-31',
         'capacity': mw_installati * 1000,
-        'system_loss': 0.1,  # 10% di perdite standard (cavi, inverter, polvere)
+        'system_loss': 0.1,  
         'tracking': tracking,
-        'tilt': 35,          # Inclinazione standard fissa
-        'azim': 180,         # Orientato a Sud
+        'tilt': 35,          
+        'azim': 180,         
         'dataset': 'merra2',
         'format': 'json'
     }
@@ -144,8 +144,10 @@ with col_flotta:
         lat_click = 41.9
         lon_click = 12.5
     
+    # ⚠️ FIX: Selettore spostato FUORI dal form per renderlo interattivo
+    tipo_fonte = st.radio("Tecnologia:", ["🌬️ Eolico", "☀️ Fotovoltaico"], horizontal=True)
+    
     with st.form("aggiungi_parco"):
-        tipo_fonte = st.radio("Tecnologia:", ["🌬️ Eolico", "☀️ Fotovoltaico"], horizontal=True)
         
         c1, c2 = st.columns(2)
         lat_in = c1.number_input("Latitudine", value=lat_click, format="%.4f")
@@ -157,8 +159,8 @@ with col_flotta:
         
         if "Eolico" in tipo_fonte:
             modelli = {
+                "Onshore Grande (Vestas V150 - 4.2 MW)": "Vestas V150 4200", # ⚠️ FIX: Ora è di default
                 "Onshore Standard (Vestas V112 - 3.3 MW)": "Vestas V112 3300",
-                "Onshore Grande (Vestas V150 - 4.2 MW)": "Vestas V150 4200",
                 "Offshore Gigante (Vestas V164 - 9.5 MW)": "Vestas V164 9500"
             }
             scelta_tecnica = st.selectbox("Modello Turbina", list(modelli.keys()))
@@ -203,7 +205,7 @@ if st.button("🚀 Avvia Simulazione di Rete (Anno 2019)", type="primary", use_c
     if len(st.session_state.flotta) == 0:
         st.warning("Aggiungi almeno un impianto alla flotta prima di simulare.")
     elif TOKEN_NINJA == "INSERISCI_QUI_IL_TUO_TOKEN":
-        st.error("⚠️ Devi inserire il tuo Token API nel codice (riga 196) prima di avviare la simulazione.")
+        st.error("⚠️ Devi inserire il tuo Token API nel codice (riga 197) prima di avviare la simulazione.")
     else:
         with st.spinner("Caricamento dati reali Terna e connessione API in corso..."):
             df_carico = carica_fabbisogno_reale('20190101_20191231_MGP_Fabbisogno.xlsx')
