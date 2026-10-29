@@ -83,7 +83,7 @@ def _estrai_dati_ninja(dati_json):
     return df
 
 @st.cache_data(show_spinner=False)
-def carica_fabbisogno_reale(file_path='20190101_20191231_MGP_Fabbisogno.xlsx'):
+def carica_fabbisogno_reale(file_path='Fabbisogno.xlsx'):
     try:
         df = pd.read_excel(file_path, thousands='.', decimal=',')
         rename_map = {'Nord': 'NORD', 'Centro Nord': 'CNOR', 'Centro Sud': 'CSUD', 
