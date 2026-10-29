@@ -10,38 +10,47 @@ import altair as alt
 # FUNZIONI DI CALCOLO E DATI
 # ==========================================
 
-def calcola_potenza_eolica_mw(v_vento_ms, p_nominale_mw):
-    """Calcola la potenza eolica in MW usando una curva di potenza standard"""
-    v_cut_in = 3.0    
-    v_rated = 11.0    
-    v_cut_out = 25.0  
-    
-    if v_vento_ms < v_cut_in or v_vento_ms > v_cut_out:
-        return 0.0
-    elif v_cut_in <= v_vento_ms < v_rated:
-        # Decadimento quadratico approssimato
-        return p_nominale_mw * ((v_vento_ms**2 - v_cut_in**2) / (v_rated**2 - v_cut_in**2))
-    else:
-        return p_nominale_mw
 
-@st.cache_data(show_spinner=False)
-def scarica_vento_openmeteo(lat, lon, anno=2023):
-    """Scarica un anno di dati di vento orari da Open-Meteo per un sito"""
-    url_wind = "https://archive-api.open-meteo.com/v1/archive"
-    params_wind = {
-        "latitude": lat, "longitude": lon,
-        "start_date": f"{anno}-01-01", 
-        "end_date": f"{anno}-12-31",   
-        "hourly": "windspeed_100m", "wind_speed_unit": "ms", "timezone": "UTC"
+
+def scarica_produzione_ninja(lat, lon, token_api, mw_installati, anno=2023):
+    """
+    Interroga l'API di Renewables.ninja per ottenere la produzione oraria diretta (in MW).
+    """
+    url = 'https://www.renewables.ninja/api/data/wind'
+    
+    # Intestazione con il tuo Token di sicurezza
+    headers = {
+        'Authorization': f'Token {token_api}'
     }
-    resp = requests.get(url_wind, params=params_wind)
-    if resp.status_code != 200: return None
+    
+    # Parametri della simulazione
+    params = {
+        'lat': lat,
+        'lon': lon,
+        'date_from': f'{anno}-01-01',
+        'date_to': f'{anno}-12-31',
+        'capacity': mw_installati * 1000,  # L'API ragiona in kW, quindi moltiplichiamo per 1000
+        'height': 100,                     # Altezza mozzo in metri (standard onshore)
+        'turbine': 'Vestas V112 3300',     # Modello di turbina molto diffuso per l'onshore europeo
+        'format': 'json'
+    }
+    
+    print(f"Richiesta a Ninja API per Lat:{lat:.2f}, Lon:{lon:.2f}...")
+    r = requests.get(url, headers=headers, params=params)
+    
+    if r.status_code != 200:
+        print(f"Errore API: {r.status_code} - {r.text}")
+        return None
         
-    data = resp.json()
-    df = pd.DataFrame({
-        'Data_Ora': pd.to_datetime(data['hourly']['time']),
-        'Vento_ms': data['hourly']['windspeed_100m']
-    })
+    # Estrazione dei dati
+    dati = r.json()
+    
+    # Il JSON restituisce un dizionario 'data' con { "Timestamp": valore_in_kW }
+    # Lo convertiamo in DataFrame e trasformiamo i kW in MW
+    df = pd.DataFrame(list(dati['data'].items()), columns=['Data_Ora', 'Produzione_MW'])
+    df['Data_Ora'] = pd.to_datetime(df['Data_Ora']).dt.tz_localize(None) # Rimuove il fuso orario per uniformità
+    df['Produzione_MW'] = df['Produzione_MW'] / 1000.0                   # Riportiamo a Megawatt
+    
     return df
 
 @st.cache_data(show_spinner=False)
