@@ -170,13 +170,21 @@ if st.button("🚀 Avvia Simulazione di Rete (Anno 2023)", type="primary", use_c
             
             errori = False
             for parco in st.session_state.flotta:
+                # 1. Recuperiamo il modello di turbina salvato per questo parco
+                # (Se per qualche motivo è un parco vecchio senza turbina, usa la Vestas standard)
+                turbina_corrente = parco.get('turbina_id', 'Vestas V112 3300')
+                
+                # 2. Chiamata corretta con TUTTI E 6 i parametri nell'ordine giusto
                 df_produzione = scarica_produzione_ninja(
                     parco['lat'], 
                     parco['lon'], 
                     TOKEN_NINJA, 
                     parco['mw'], 
-                    2023
+                    turbina_corrente,  # <-- Il modello di turbina (5° parametro)
+                    2023               # <-- L'anno (6° parametro)
                 )
+                
+                
                 if df_produzione is not None:
                     # L'API restituisce già i MW reali
                     df_prod_zone[parco['zona']] += df_produzione['Produzione_MW'].values
