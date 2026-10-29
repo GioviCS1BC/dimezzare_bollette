@@ -71,23 +71,33 @@ def scarica_produzione_ninja(lat, lon, token_api, mw_installati, turbina_scelta,
     return df
 
 @st.cache_data(show_spinner=False)
-def genera_carico_sintetico(anno=2019):
-    """Genera un carico termico residuo fittizio (in MW) per le 6 zone italiane."""
-    date_rng = pd.date_range(start=f'{anno}-01-01', end=f'{anno}-12-31 23:00:00', freq='h')
-    ore = len(date_rng)
-    
-    base_load = {'NORD': 15000, 'CNOR': 3000, 'CSUD': 4000, 'SUD': 2500, 'SICI': 2000, 'SARD': 1000}
-    df_carico = pd.DataFrame({'Data_Ora': date_rng})
-    
-    for zona, base in base_load.items():
-        ciclo_giornaliero = -np.cos(np.linspace(0, 2 * np.pi, 24)) * (base * 0.2)
-        ciclo_annuale = np.cos(np.linspace(0, 2 * np.pi, ore)) * (base * 0.15)
-        rumore = np.random.normal(0, base * 0.05, ore)
+def carica_fabbisogno_reale(file_path='20190101_20191231_MGP_Fabbisogno.xlsx'):
+    """Carica i dati storici reali del fabbisogno orario GME/Terna per il 2019"""
+    try:
+        # Legge il file interpretando correttamente le migliaia col punto e i decimali con la virgola
+        df = pd.read_excel(file_path, thousands='.', decimal=',')
         
-        carico_orario = base + np.tile(ciclo_giornaliero, ore // 24 + 1)[:ore] + ciclo_annuale + rumore
-        df_carico[zona] = np.maximum(carico_orario, base * 0.4) 
+        # Mappa i nomi delle colonne per farli combaciare col nostro codice
+        rename_map = {
+            'Nord': 'NORD',
+            'Centro Nord': 'CNOR',
+            'Centro Sud': 'CSUD',
+            'Sud': 'SUD',
+            'Sicilia': 'SICI',
+            'Sardegna': 'SARD'
+        }
+        df = df.rename(columns=rename_map)
         
-    return df_carico
+        # Crea la colonna Data_Ora unendo la data testuale con l'ora (sottraendo 1 perché l'ora va da 1 a 24)
+        df['Data_Ora'] = pd.to_datetime(df['Data'], format='%d/%m/%Y') + pd.to_timedelta(df['Ora'] - 1, unit='h')
+        
+        # Filtra solo le colonne che ci servono per la simulazione
+        colonne_finali = ['Data_Ora', 'NORD', 'CNOR', 'CSUD', 'SUD', 'SICI', 'SARD']
+        return df[colonne_finali]
+    
+    except Exception as e:
+        st.error(f"Errore nel caricamento del file Excel: {e}")
+        return None
 
 # ==========================================
 # INTERFACCIA STREAMLIT
@@ -190,7 +200,7 @@ if st.button("🚀 Avvia Simulazione di Rete (Anno 2019)", type="primary", use_c
         st.error("⚠️ Devi inserire il tuo Token API nel codice (riga 146) prima di avviare la simulazione.")
     else:
         with st.spinner("Connessione a Renewables.ninja in corso..."):
-            df_carico = genera_carico_sintetico(2019)
+            df_carico = carica_fabbisogno_reale('20190101_20191231_MGP_Fabbisogno.xlsx')
             df_prod_zone = pd.DataFrame({'Data_Ora': df_carico['Data_Ora']})
             for zona in ["NORD", "CNOR", "CSUD", "SUD", "SICI", "SARD"]:
                 df_prod_zone[zona] = 0.0
