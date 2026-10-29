@@ -10,10 +10,9 @@ import altair as alt
 # FUNZIONI DI CALCOLO E DATI
 # ==========================================
 
-def scarica_produzione_ninja(lat, lon, token_api, mw_installati, anno=2023):
+def scarica_produzione_ninja(lat, lon, token_api, mw_installati, turbina_scelta, anno=2023):
     """
     Interroga l'API di Renewables.ninja per ottenere la produzione oraria diretta (in MW).
-    I loro modelli includono già l'orografia del terreno e le curve di potenza delle turbine.
     """
     url = 'https://www.renewables.ninja/api/data/wind'
     headers = {'Authorization': f'Token {token_api}'}
@@ -22,9 +21,9 @@ def scarica_produzione_ninja(lat, lon, token_api, mw_installati, anno=2023):
         'lon': lon,
         'date_from': f'{anno}-01-01',
         'date_to': f'{anno}-12-31',
-        'capacity': mw_installati * 1000,  # L'API ragiona in kW
-        'height': 100,                     # Altezza mozzo (100 metri)
-        'turbine': 'Vestas V112 3300',     # Turbina di riferimento
+        'capacity': mw_installati * 1000,
+        'height': 100,                     
+        'turbine': turbina_scelta,     
         'format': 'json'
     }
     
@@ -37,21 +36,17 @@ def scarica_produzione_ninja(lat, lon, token_api, mw_installati, anno=2023):
     dati = r.json()
     df = pd.DataFrame(list(dati['data'].items()), columns=['Data_Ora', 'Produzione_MW'])
     
-    # --- FIX OVERFLOW DATETIME ---
-    # Controlliamo il formato del primo elemento: se è fatto solo di numeri, è un Unix Timestamp
+    # Fix overflow data
     primo_valore = str(df['Data_Ora'].iloc[0])
-    
     if primo_valore.isdigit():
-        # Converte da Unix Epoch in millisecondi a Data Reale
         df['Data_Ora'] = pd.to_datetime(df['Data_Ora'].astype(float), unit='ms', utc=True)
     else:
-        # Piano B: se un domani l'API dovesse restituire formati testuali
         df['Data_Ora'] = pd.to_datetime(df['Data_Ora'], utc=True)
         
-    df['Data_Ora'] = df['Data_Ora'].dt.tz_localize(None) # Sganciamo il fuso orario per allinearlo al nostro set
-    # -----------------------------
+    df['Data_Ora'] = df['Data_Ora'].dt.tz_localize(None)
     
-    df['Produzione_MW'] = df['Produzione_MW'] / 1000.0  # Riportiamo da kW a MW
+    # FIX TYPEERROR: Convertiamo esplicitamente in numeri
+    df['Produzione_MW'] = pd.to_numeric(df['Produzione_MW'], errors='coerce') / 1000.0  
     
     return df
 
