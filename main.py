@@ -114,14 +114,22 @@ with col_mappa:
     )
     
     # Disegna i parchi esistenti
-    for i, parco in enumerate(st.session_state.flotta):
-        folium.Marker(
-            [parco['lat'], parco['lon']], 
-            popup=f"{parco['zona']} - {parco['mw']} MW",
-            icon=folium.Icon(color="green", icon="leaf")
-        ).add_to(m)
-        
-    mappa = st_folium(m, height=400, use_container_width=True)
+    # Inserisci qui il tuo token segreto di Renewables.ninja
+            TOKEN_NINJA = "c6039a7ae92563c77ebbb7586ba45a1c7cf42dc8"
+            
+            for parco in st.session_state.flotta:
+                # Richiama la NUOVA funzione invece di scarica_vento_openmeteo
+                df_produzione = scarica_produzione_ninja(
+                    parco['lat'], 
+                    parco['lon'], 
+                    TOKEN_NINJA, 
+                    parco['mw'], 
+                    2023
+                )
+                
+                if df_produzione is not None:
+                    # Ninja restituisce già i MW pronti, quindi li sommiamo direttamente alla zona
+                    df_prod_zone[parco['zona']] += df_produzione['Produzione_MW'].values
 
 with col_flotta:
     st.subheader("2. Aggiungi al Portafoglio")
