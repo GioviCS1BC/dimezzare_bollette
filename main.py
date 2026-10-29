@@ -208,7 +208,7 @@ if st.button("🚀 Avvia Simulazione di Rete (Anno 2019)", type="primary", use_c
         st.error("⚠️ Devi inserire il tuo Token API nel codice (riga 197) prima di avviare la simulazione.")
     else:
         with st.spinner("Caricamento dati reali Terna e connessione API in corso..."):
-            df_carico = carica_fabbisogno_reale('20190101_20191231_MGP_Fabbisogno.xlsx')
+            df_carico = carica_fabbisogno_reale('Fabbisogno.xlsx')
             
             if df_carico is None:
                 st.error("❌ Errore: File Excel del fabbisogno non trovato o illeggibile. Assicurati di averlo caricato su GitHub e di avere 'openpyxl' in requirements.txt.")
