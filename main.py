@@ -36,8 +36,22 @@ def scarica_produzione_ninja(lat, lon, token_api, mw_installati, anno=2023):
         
     dati = r.json()
     df = pd.DataFrame(list(dati['data'].items()), columns=['Data_Ora', 'Produzione_MW'])
-    df['Data_Ora'] = pd.to_datetime(df['Data_Ora']).dt.tz_localize(None)
-    df['Produzione_MW'] = df['Produzione_MW'] / 1000.0  # Riportiamo in MW
+    
+    # --- FIX OVERFLOW DATETIME ---
+    # Controlliamo il formato del primo elemento: se è fatto solo di numeri, è un Unix Timestamp
+    primo_valore = str(df['Data_Ora'].iloc[0])
+    
+    if primo_valore.isdigit():
+        # Converte da Unix Epoch in millisecondi a Data Reale
+        df['Data_Ora'] = pd.to_datetime(df['Data_Ora'].astype(float), unit='ms', utc=True)
+    else:
+        # Piano B: se un domani l'API dovesse restituire formati testuali
+        df['Data_Ora'] = pd.to_datetime(df['Data_Ora'], utc=True)
+        
+    df['Data_Ora'] = df['Data_Ora'].dt.tz_localize(None) # Sganciamo il fuso orario per allinearlo al nostro set
+    # -----------------------------
+    
+    df['Produzione_MW'] = df['Produzione_MW'] / 1000.0  # Riportiamo da kW a MW
     
     return df
 
