@@ -145,7 +145,7 @@ st.divider()
 st.subheader("3. Avvia Simulazione")
 
 # INSERISCI QUI IL TUO TOKEN API DI RENEWABLES.NINJA
-TOKEN_NINJA = "INSERISCI_QUI_IL_TUO_TOKEN"
+TOKEN_NINJA = "c6039a7ae92563c77ebbb7586ba45a1c7cf42dc8"
 
 if st.button("🚀 Avvia Simulazione di Rete (Anno 2023)", type="primary", use_container_width=True):
     if len(st.session_state.flotta) == 0:
